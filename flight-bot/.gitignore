@@ -1,0 +1,6 @@
+.env
+config.yaml
+price_history.csv
+monitor.log
+__pycache__/
+*.pyc
