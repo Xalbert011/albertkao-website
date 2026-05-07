@@ -1,43 +1,41 @@
 # 機票監控機器人設定檔
 # 使用方式：複製此檔案為 config.yaml，填入你的資訊後執行 python flight_monitor.py
 
-# ── Amadeus API（免費申請：https://developers.amadeus.com）──────────────────
-amadeus:
-  api_key: "YOUR_AMADEUS_API_KEY"
-  api_secret: "YOUR_AMADEUS_API_SECRET"
+# ── SerpAPI（https://serpapi.com 免費申請，支援 Google 帳號登入）───────────
+serpapi:
+  api_key: "YOUR_SERPAPI_KEY"
 
-# ── Email 通知（以下以 Gmail 為例）─────────────────────────────────────────
-# Gmail 需先至 Google 帳號 > 安全性 > 開啟兩步驗證，再建立「應用程式密碼」
+# ── Email 通知（以 Gmail 為例）─────────────────────────────────────────────
+# Gmail 需先至 Google 帳號 > 安全性 > 兩步驗證，再建立「應用程式密碼」（16 碼）
 email:
   smtp_host: "smtp.gmail.com"
   smtp_port: 587
   username: "your_gmail@gmail.com"
-  password: "your_16_char_app_password"   # Gmail 應用程式密碼（非登入密碼）
+  password: "your_16_char_app_password"
   from: "your_gmail@gmail.com"
-  to: "recipient@gmail.com"              # 通知要寄給誰（可以是自己）
+  to: "your_gmail@gmail.com"
 
-# ── 儲存歷史紀錄的 CSV 檔案路徑 ─────────────────────────────────────────────
+# ── CSV 歷史紀錄路徑 ─────────────────────────────────────────────────────
 history_csv: "price_history.csv"
 
-# ── 監控的航線（最多可設定多條）────────────────────────────────────────────
-# 機場代碼查詢：https://www.iata.org/en/publications/directories/code-search/
+# ── 監控的航線 ────────────────────────────────────────────────────────────
 routes:
-  - origin: "TPE"              # 台北桃園
-    destination: "NRT"         # 東京成田
-    depart_date: "2026-08-01"  # 出發日期（YYYY-MM-DD）
-    return_date: "2026-08-08"  # 回程日期（留空則查單程）
-    threshold_price: 8000      # 低於此金額（TWD）才發通知
+  - origin: "TPE"
+    destination: "NRT"
+    depart_date: "2026-08-01"
+    return_date: "2026-08-08"
+    threshold_price: 8000
     currency: "TWD"
 
   - origin: "TPE"
-    destination: "BKK"         # 曼谷素萬那普
+    destination: "BKK"
     depart_date: "2026-09-01"
     return_date: "2026-09-08"
     threshold_price: 6000
     currency: "TWD"
 
   - origin: "TPE"
-    destination: "LAX"         # 洛杉磯
+    destination: "LAX"
     depart_date: "2026-12-20"
     return_date: "2027-01-05"
     threshold_price: 28000

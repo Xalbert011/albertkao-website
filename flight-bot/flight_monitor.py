@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""機票價格監控機器人 - 定期查詢指定航線價格，低於門檻時發送 Email 通知"""
+"""機票價格監控機器人 — 使用 SerpAPI (Google Flights) 查詢票價，低於門檻時發送 Email 通知"""
 
 import os
 import csv
-import time
 import smtplib
 import logging
 import argparse
@@ -28,6 +27,8 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+SERPAPI_URL = "https://serpapi.com/search"
 
 
 @dataclass
@@ -55,76 +56,53 @@ class FlightOffer:
     checked_at: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
 
 
-class AmadeusAPI:
-    """Amadeus 免費開發者 API（申請：https://developers.amadeus.com）"""
+def search_flights(route: Route, api_key: str) -> list[FlightOffer]:
+    """使用 SerpAPI 查詢 Google Flights 價格"""
+    params = {
+        "engine": "google_flights",
+        "departure_id": route.origin,
+        "arrival_id": route.destination,
+        "outbound_date": route.depart_date,
+        "currency": route.currency,
+        "api_key": api_key,
+        "hl": "zh-tw",
+    }
+    if route.return_date:
+        params["return_date"] = route.return_date
+        params["type"] = "1"   # round trip
+    else:
+        params["type"] = "2"   # one way
 
-    TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
-    SEARCH_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+    r = requests.get(SERPAPI_URL, params=params, timeout=30)
+    r.raise_for_status()
+    data = r.json()
 
-    def __init__(self, key: str, secret: str):
-        self._key = key
-        self._secret = secret
-        self._token: Optional[str] = None
-        self._expires: float = 0
+    offers: list[FlightOffer] = []
+    for section in ("best_flights", "other_flights"):
+        for flight in data.get(section, []):
+            price = flight.get("price")
+            if price is None:
+                continue
+            legs = flight.get("flights", [])
+            airline = legs[0].get("airline", "未知") if legs else "未知"
+            stops = len(legs) - 1 if legs else 0
+            duration_min = flight.get("total_duration", 0)
+            h, m = divmod(duration_min, 60)
+            duration = f"{h}小時{m}分" if m else f"{h}小時"
+            offers.append(FlightOffer(
+                route=route,
+                price=float(price),
+                airline=airline,
+                stops=stops,
+                duration=duration,
+            ))
 
-    def _auth(self):
-        if self._token and time.time() < self._expires:
-            return
-        r = requests.post(
-            self.TOKEN_URL,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": self._key,
-                "client_secret": self._secret,
-            },
-            timeout=15,
-        )
-        r.raise_for_status()
-        d = r.json()
-        self._token = d["access_token"]
-        self._expires = time.time() + d["expires_in"] - 30
-
-    def search(self, route: Route) -> list[FlightOffer]:
-        self._auth()
-        params: dict = {
-            "originLocationCode": route.origin,
-            "destinationLocationCode": route.destination,
-            "departureDate": route.depart_date,
-            "adults": 1,
-            "currencyCode": route.currency,
-            "max": 10,
-        }
-        if route.return_date:
-            params["returnDate"] = route.return_date
-
-        r = requests.get(
-            self.SEARCH_URL,
-            headers={"Authorization": f"Bearer {self._token}"},
-            params=params,
-            timeout=20,
-        )
-        r.raise_for_status()
-
-        offers = []
-        for o in r.json().get("data", []):
-            segments = o["itineraries"][0]["segments"]
-            offers.append(
-                FlightOffer(
-                    route=route,
-                    price=float(o["price"]["grandTotal"]),
-                    airline=segments[0]["carrierCode"],
-                    stops=len(segments) - 1,
-                    duration=o["itineraries"][0]["duration"],
-                )
-            )
-        return sorted(offers, key=lambda x: x.price)
+    return sorted(offers, key=lambda x: x.price)
 
 
 class CSVLogger:
-    HEADER = [
-        "checked_at", "route", "airline", "price", "currency",
-        "stops", "duration", "threshold", "alert_sent",
-    ]
+    HEADER = ["checked_at", "route", "airline", "price", "currency",
+              "stops", "duration", "threshold", "alert_sent"]
 
     def __init__(self, path: str = "price_history.csv"):
         self.path = path
@@ -135,15 +113,9 @@ class CSVLogger:
     def write(self, offer: FlightOffer, alerted: bool):
         with open(self.path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow([
-                offer.checked_at,
-                offer.route.label,
-                offer.airline,
-                offer.price,
-                offer.route.currency,
-                offer.stops,
-                offer.duration,
-                offer.route.threshold,
-                alerted,
+                offer.checked_at, offer.route.label, offer.airline,
+                offer.price, offer.route.currency, offer.stops,
+                offer.duration, offer.route.threshold, alerted,
             ])
 
 
@@ -162,25 +134,20 @@ class Emailer:
         msg["From"] = self.sender
         msg["To"] = self.recipient
 
-        def fmt_duration(d: str) -> str:
-            return d.replace("PT", "").replace("H", " 小時 ").replace("M", " 分")
-
         rows = "".join(
             f"<tr>"
             f"<td>{o.route.label}</td>"
             f"<td>{o.airline}</td>"
             f"<td style='color:green'><b>{o.route.currency} {o.price:,.0f}</b></td>"
-            f"<td style='color:#888'>門檻: {o.route.currency} {o.route.threshold:,}</td>"
-            f"<td>{'直飛' if o.stops == 0 else f'{o.stops} 次轉機'}</td>"
-            f"<td>{fmt_duration(o.duration)}</td>"
+            f"<td style='color:#888'>門檻: {o.route.threshold:,}</td>"
+            f"<td>{'直飛' if o.stops == 0 else f'{o.stops}次轉機'}</td>"
+            f"<td>{o.duration}</td>"
             f"</tr>"
             for o in offers
         )
-
         html = f"""<html><body style="font-family:sans-serif">
 <h2 style="color:#004080">✈️ 找到便宜機票！</h2>
-<table border="1" cellpadding="10" cellspacing="0"
-       style="border-collapse:collapse;font-size:14px">
+<table border="1" cellpadding="10" cellspacing="0" style="border-collapse:collapse;font-size:14px">
   <tr style="background:#004080;color:white">
     <th>航線</th><th>航空公司</th><th>價格</th><th>門檻</th><th>停靠</th><th>飛行時間</th>
   </tr>
@@ -196,7 +163,7 @@ class Emailer:
             s.starttls()
             s.login(self.user, self.pwd)
             s.send_message(msg)
-        log.info(f"✉️  已發送 Email 通知，共 {len(offers)} 筆低價航班")
+        log.info(f"✉️  已發送 Email 通知，共 {len(offers)} 筆")
 
 
 def load_config(path: str) -> dict:
@@ -207,11 +174,7 @@ def load_config(path: str) -> dict:
 def run(config_path: str, dry_run: bool = False):
     cfg = load_config(config_path)
 
-    api = AmadeusAPI(
-        key=os.getenv("AMADEUS_API_KEY") or cfg["amadeus"]["api_key"],
-        secret=os.getenv("AMADEUS_API_SECRET") or cfg["amadeus"]["api_secret"],
-    )
-
+    api_key = os.getenv("SERPAPI_KEY") or cfg["serpapi"]["api_key"]
     email_cfg = {k: os.getenv(f"SMTP_{k.upper()}", v) for k, v in cfg["email"].items()}
     mailer = Emailer(email_cfg)
     csv_log = CSVLogger(cfg.get("history_csv", "price_history.csv"))
@@ -234,7 +197,7 @@ def run(config_path: str, dry_run: bool = False):
     for route in routes:
         log.info(f"查詢: {route.label}")
         try:
-            offers = api.search(route)
+            offers = search_flights(route, api_key)
             if not offers:
                 log.warning("  找不到任何航班")
                 continue
@@ -242,10 +205,7 @@ def run(config_path: str, dry_run: bool = False):
             hit = best.price <= route.threshold
             csv_log.write(best, hit)
             status = "🔔 觸發！" if hit else "無變動"
-            log.info(
-                f"  最低價: {route.currency} {best.price:,.0f}  "
-                f"門檻: {route.threshold:,}  {status}"
-            )
+            log.info(f"  最低價: {route.currency} {best.price:,.0f}  門檻: {route.threshold:,}  {status}")
             if hit:
                 alerts.append(best)
         except Exception as e:
