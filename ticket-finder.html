@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>找票機器人 — Claude AI 機票搜尋助手</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      color: #222;
+    }
+    header {
+      background: #004080;
+      color: white;
+      padding: 40px 20px 30px;
+      text-align: center;
+    }
+    header h1 { margin: 0 0 8px; font-size: 32px; }
+    header p  { margin: 0; font-size: 16px; opacity: .85; }
+    nav {
+      background: #003060;
+      text-align: center;
+      padding: 10px;
+    }
+    nav a {
+      color: #90c0ff;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    nav a:hover { text-decoration: underline; }
+
+    .intro {
+      max-width: 820px;
+      margin: 28px auto 0;
+      padding: 0 20px;
+      text-align: center;
+      color: #555;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ── Prompt cards ───────────────────────────────────── */
+    .cards {
+      max-width: 820px;
+      margin: 24px auto;
+      padding: 0 20px;
+      display: grid;
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.08);
+      padding: 24px 28px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .card-num {
+      background: #004080;
+      color: white;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 18px;
+      color: #004080;
+    }
+    .card .desc {
+      color: #555;
+      font-size: 14px;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .prompt-box {
+      position: relative;
+      background: #f0f5ff;
+      border: 1px solid #c8daf5;
+      border-radius: 8px;
+      padding: 16px 48px 16px 16px;
+    }
+    .prompt-box pre {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #1a3060;
+    }
+    .prompt-box .placeholder {
+      background: #004080;
+      color: white;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 12px;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #004080;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .copy-btn:hover  { background: #0060b0; }
+    .copy-btn.copied { background: #22a060; }
+
+    /* ── Download section ───────────────────────────────── */
+    .download-section {
+      max-width: 820px;
+      margin: 0 auto 32px;
+      padding: 0 20px;
+    }
+    .download-section .card { border-top: 4px solid #004080; }
+    .download-section h2 {
+      color: #004080;
+      margin-top: 0;
+    }
+    .steps {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    .steps ol { margin: 0; padding-left: 20px; }
+    .steps li { margin-bottom: 8px; font-size: 14px; line-height: 1.6; }
+    .steps code {
+      background: #e2eaf5;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .file-list { display: grid; gap: 10px; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8f8f8;
+      border: 1px solid #dde;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .file-info { display: flex; align-items: center; gap: 12px; }
+    .file-icon {
+      font-size: 22px;
+      width: 32px;
+      text-align: center;
+    }
+    .file-name { font-weight: 600; font-size: 14px; }
+    .file-desc { color: #777; font-size: 12px; }
+    .dl-btn {
+      background: #004080;
+      color: white;
+      text-decoration: none;
+      padding: 7px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      transition: background .2s;
+      white-space: nowrap;
+    }
+    .dl-btn:hover { background: #0060b0; }
+
+    .cron-box {
+      margin-top: 16px;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .cron-box .comment { color: #6c7086; }
+
+    footer {
+      text-align: center;
+      font-size: 13px;
+      color: #aaa;
+      padding: 24px;
+    }
+    footer a { color: #6aa; }
+
+    @media (max-width: 600px) {
+      .card { padding: 18px; }
+      header h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="font-size:40px;margin-bottom:8px">✈️</div>
+  <h1>找票機器人</h1>
+  <p>7 個 Claude AI Prompt × 1 個 Python 自動監控機器人</p>
+</header>
+
+<nav>
+  <a href="index.html">← 返回 Albert Kao 個人頁面</a>
+</nav>
+
+<p class="intro">
+  把以下任一段 Prompt 貼入 <strong>Claude.ai</strong>，即可讓 AI 幫你搜尋便宜機票、分析票價趨勢、找最划算日期。<br>
+  把 <span style="color:#004080">【藍色標籤】</span> 替換成你的實際資訊即可使用。
+</p>
+
+<!-- ─────────────────── Prompt Cards ─────────────────── -->
+<div class="cards">
+
+  <!-- 1 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">1</div>
+      <h2>隱藏航班搜尋器</h2>
+    </div>
+    <p class="desc">列出廉航、區域航空、小眾航空，依實際總價格排序，找出主流平台看不到的選項。</p>
+    <div class="prompt-box" id="p1">
+      <button class="copy-btn" onclick="copyPrompt('p1', this)">複製</button>
+      <pre>列出未來 <span class="placeholder">【X 週】</span> 內從 <span class="placeholder">【出發地，例如台北 TPE】</span> 到 <span class="placeholder">【目的地，例如東京 NRT】</span> 的所有航班，包含廉航、區域航空、以及較少人知道的航空公司。
+
+請依「實際總價格（含稅費行李）」由低到高排序，並分別列出：
+・直飛選項
+・1 次轉機選項（中東 / 東南亞樞紐）
+・其他小眾航空組合
+
+附上各航班的起飛時間、飛行總時數與最後查詢日期。</pre>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">2</div>
+      <h2>票價策略分析</h2>
+    </div>
+    <p class="desc">分析歷史趨勢，告訴你現在的票價是高是低，該立刻訂還是繼續等。</p>
+    <div class="prompt-box" id="p2">
+      <button class="copy-btn" onclick="copyPrompt('p2', this)">複製</button>
+      <pre>分析 <span class="placeholder">【出發城市，例如台北】</span> 到 <span class="placeholder">【目的地，例如洛杉磯】</span> 在 <span class="placeholder">【月份，例如 2026 年 8 月】</span> 的歷史機票價格趨勢。
+
+我目前看到的價格是 <span class="placeholder">【目前價格，例如 NT$35,000】</span>，請告訴我：
+1. 這個價格是高於還是低於歷史平均水平？
+2. 根據歷史規律，我應該現在訂還是再等等？
+3. 我應該設定多少作為目標票價（等到這個價位就立刻訂）？
+4. 這條航線最便宜的「訂票時機」通常是出發前幾天？
+
+請用圖表或表格呈現月均價與我的目前價格的相對位置。</pre>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">3</div>
+      <h2>找出最適合的日期</h2>
+    </div>
+    <p class="desc">比較目標日期前後的所有出發 / 回程組合，找出 3 個最划算的選項並說明理由。</p>
+    <div class="prompt-box" id="p3">
+      <button class="copy-btn" onclick="copyPrompt('p3', this)">複製</button>
+      <pre>我想在 <span class="placeholder">【目標日期，例如 2026 年 7 月初】</span> 前後 <span class="placeholder">【X 天，例如 5 天】</span> 內出發，從 <span class="placeholder">【出發地】</span> 飛往 <span class="placeholder">【目的地】</span>，停留約 <span class="placeholder">【幾天，例如 7 天】</span>。
+
+請從 Expedia、Skyscanner、Trip.com 等平台，比較這段時間內所有出發與回程日期組合的票價，列出 3 個最划算的選項，並說明：
+・為什麼選出這 3 個組合？
+・出發日與回程日是否完全在目標範圍內？
+・有哪些注意事項（如週末溢價、假期高峰）？
+
+請以表格呈現，欄位包含：出發日、回程日、天數、航空公司、價格（含稅）、直飛 / 轉機。</pre>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">4</div>
+      <h2>觸發降價通知</h2>
+    </div>
+    <p class="desc">找出目前真的有效的免費降價追蹤服務，並建立一份可立即使用的追蹤表格。</p>
+    <div class="prompt-box" id="p4">
+      <button class="copy-btn" onclick="copyPrompt('p4', this)">複製</button>
+      <pre>我想監控 <span class="placeholder">【目的地，例如東京】</span> 的機票降價，出發地是 <span class="placeholder">【出發地，例如台北】</span>，目標出發月份是 <span class="placeholder">【月份】</span>。
+
+請幫我：
+1. 研究並列出目前（2026 年）真的有效、免費的機票降價追蹤服務（Google Flights、Skyscanner、Hopper、Kayak 等），並說明各自的設定步驟（不要只列名字，要附上具體操作方式）。
+2. 建立一份 Google Sheets 追蹤表格，欄位包含：日期、出發地、目的地、查詢價格、歷史均價、是否低於門檻、來源平台。
+3. 告訴我今天就能開始用的完整設定流程，讓我在價格低於 <span class="placeholder">【目標金額，例如 NT$8,000】</span> 時收到通知。</pre>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">5</div>
+      <h2>避開昂貴日期</h2>
+    </div>
+    <p class="desc">製作視覺化日曆熱圖，標出整個月最便宜與最貴的旅遊時段。</p>
+    <div class="prompt-box" id="p5">
+      <button class="copy-btn" onclick="copyPrompt('p5', this)">複製</button>
+      <pre>搜尋 <span class="placeholder">【出發地，例如台北 TPE】</span> 到 <span class="placeholder">【目的地，例如洛杉磯 LAX】</span> 在 <span class="placeholder">【月份，例如 2026 年 6 月】</span> 所有可能的來回日期組合票價。
+
+請抓取真實價格資料，並製作一個視覺化的日曆熱圖（顏色深淺代表票價高低），讓我一眼看出最便宜的旅遊時段。
+
+要求：
+・停留天數以 <span class="placeholder">【幾天，例如 7 天】</span> 為基準
+・特別標記任何總價低於 <span class="placeholder">【預算，例如 NT$25,000】</span> 的平日組合（用星號 ★ 標記）
+・附上資料來源與查詢時間</pre>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">6</div>
+      <h2>破解訂票系統</h2>
+    </div>
+    <p class="desc">深入旅遊駭客論壇與航空部落格，找出 5 個目前真的有效的省錢訂票技巧。</p>
+    <div class="prompt-box" id="p6">
+      <button class="copy-btn" onclick="copyPrompt('p6', this)">複製</button>
+      <pre>立即深入研究旅遊駭客論壇（PTT 旅遊板、背包客棧、FlyerTalk）與航空公司部落格。
+
+找出 5 個目前（2026 年）真的有效、可以降低 <span class="placeholder">【出發地 → 目的地，例如台北 → 歐洲】</span> 機票價格的訂票技巧。
+
+要求：
+・不要泛泛建議（如「提早訂」），要有具體的操作步驟
+・每個技巧請附上真實案例或來源連結，讓我可以自行驗證
+・說明適用的航空公司或適用條件
+・若技巧有風險或注意事項也請一併說明</pre>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-num">7</div>
+      <h2>建立我的機票機器人</h2>
+    </div>
+    <p class="desc">讓 Claude 幫你寫一個 Python 監控程式，價格低於門檻時自動寄 Email 通知（可搭配下方現成版本使用）。</p>
+    <div class="prompt-box" id="p7">
+      <button class="copy-btn" onclick="copyPrompt('p7', this)">複製</button>
+      <pre>幫我寫一個可運作的 Python 程式，監控我指定的 3 個目的地機票價格：
+・<span class="placeholder">【出發地 → 目的地 1，例如 TPE → NRT，門檻 NT$8,000】</span>
+・<span class="placeholder">【出發地 → 目的地 2，例如 TPE → BKK，門檻 NT$6,000】</span>
+・<span class="placeholder">【出發地 → 目的地 3，例如 TPE → LAX，門檻 NT$28,000】</span>
+
+功能需求：
+1. 定期抓取票價資料（使用 Amadeus 免費 API 或其他可靠來源）
+2. 每次抓取後將結果存入 price_history.csv
+3. 當價格低於設定門檻時，發送 HTML 格式的 Email 通知
+4. 支援 --once 模式（單次執行，配合 cron 排程使用）
+5. 支援 --dry-run 模式（不發 Email，只顯示結果）
+
+請建立以下可下載的檔案：
+・flight_monitor.py（主程式）
+・config.example.yaml（設定範本）
+・.env.example（環境變數範本）
+・requirements.txt（依賴套件清單）
+・README.md（部署說明）</pre>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─────────────────── Download Section ─────────────────── -->
+<div class="download-section">
+  <div class="card">
+    <h2>⬇️ 現成的 Python 機票機器人（立即可用）</h2>
+    <p style="color:#555;font-size:14px;margin-top:0">
+      上方第 7 個 Prompt 已由 Claude 實作完成，使用 <strong>Amadeus 免費 API</strong>，支援 Email 通知與 CSV 歷史紀錄。
+    </p>
+
+    <div class="steps">
+      <strong style="font-size:14px">快速部署步驟：</strong>
+      <ol>
+        <li>至 <a href="https://developers.amadeus.com" target="_blank" rel="noopener">developers.amadeus.com</a> 免費申請 API Key</li>
+        <li>下載下方所有檔案，放到同一個資料夾</li>
+        <li>執行 <code>pip install -r requirements.txt</code></li>
+        <li>複製 <code>config.example.yaml</code> 為 <code>config.yaml</code>，填入你的設定</li>
+        <li>複製 <code>.env.example</code> 為 <code>.env</code>，填入 API Key 與 Email 密碼</li>
+        <li>執行 <code>python flight_monitor.py --dry-run</code> 測試</li>
+        <li>用 cron 設定自動排程（見下方範例）</li>
+      </ol>
+    </div>
+
+    <div class="file-list">
+      <div class="file-item">
+        <div class="file-info">
+          <div class="file-icon">🐍</div>
+          <div>
+            <div class="file-name">flight_monitor.py</div>
+            <div class="file-desc">主程式 — 查詢 Amadeus API，記錄 CSV，發送 Email</div>
+          </div>
+        </div>
+        <a class="dl-btn" href="flight-bot/flight_monitor.py" download>下載</a>
+      </div>
+
+      <div class="file-item">
+        <div class="file-info">
+          <div class="file-icon">⚙️</div>
+          <div>
+            <div class="file-name">config.example.yaml</div>
+            <div class="file-desc">設定範本 — 航線、門檻價格、Email 設定</div>
+          </div>
+        </div>
+        <a class="dl-btn" href="flight-bot/config.example.yaml" download>下載</a>
+      </div>
+
+      <div class="file-item">
+        <div class="file-info">
+          <div class="file-icon">🔑</div>
+          <div>
+            <div class="file-name">.env.example</div>
+            <div class="file-desc">環境變數範本 — API Key 與 SMTP 密碼（勿上傳 GitHub）</div>
+          </div>
+        </div>
+        <a class="dl-btn" href="flight-bot/.env.example" download>下載</a>
+      </div>
+
+      <div class="file-item">
+        <div class="file-info">
+          <div class="file-icon">📦</div>
+          <div>
+            <div class="file-name">requirements.txt</div>
+            <div class="file-desc">Python 依賴套件 — requests、pyyaml、python-dotenv</div>
+          </div>
+        </div>
+        <a class="dl-btn" href="flight-bot/requirements.txt" download>下載</a>
+      </div>
+    </div>
+
+    <!-- Cron example -->
+    <h3 style="color:#004080;margin-top:24px;font-size:15px">定時排程（cron）設定範例</h3>
+    <div class="cron-box">
+      <span class="comment"># 每天早上 8 點執行一次（在你的伺服器或 Mac 上）</span><br>
+      0 8 * * * cd /path/to/flight-bot &amp;&amp; python flight_monitor.py<br><br>
+      <span class="comment"># 每 6 小時執行一次</span><br>
+      0 */6 * * * cd /path/to/flight-bot &amp;&amp; python flight_monitor.py<br><br>
+      <span class="comment"># 單次測試（不發 Email）</span><br>
+      python flight_monitor.py --dry-run
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>
+    Powered by <a href="https://claude.ai" target="_blank" rel="noopener">Claude AI</a> ×
+    <a href="https://developers.amadeus.com" target="_blank" rel="noopener">Amadeus API</a>
+    &nbsp;|&nbsp;
+    <a href="index.html">← Albert Kao 個人頁面</a>
+  </p>
+  <p style="font-size:11px">Prompts 靈感來源：@gptsavyy on Instagram</p>
+</footer>
+
+<script>
+  function copyPrompt(cardId, btn) {
+    const pre = document.getElementById(cardId).querySelector('pre');
+    const text = pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '已複製！';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = '複製';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+</script>
+
+</body>
+</html>
